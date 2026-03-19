@@ -35,7 +35,7 @@
 
         .tax-label {
             background: #f2f2f2;
-            border: 1px solid #000;
+            border: #000 2px solid;
             display: inline-block;
             padding: 2px 25px;
             font-weight: bold;
@@ -131,6 +131,15 @@
             align-items: center;
         }
 
+        .qr-container {
+            width: 150px;
+            height: 150px;
+            border: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .tax-calc {
             padding: 12px;
             text-align: right;
@@ -167,14 +176,6 @@
             position: relative;
         }
 
-        /* Nayi Image Styling */
-        .qr-img {
-            width: 85px;
-            height: 85px;
-            object-fit: contain;
-            border: 1px solid #eee;
-        }
-
         .stamp-img {
             width: 170px;
             mix-blend-mode: multiply;
@@ -201,6 +202,24 @@
             box-sizing: border-box;
         }
 
+        .sync-status {
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .sync-success {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .sync-error {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
         button.main-btn {
             padding: 10px 20px;
             cursor: pointer;
@@ -215,7 +234,8 @@
 
             .btn-panel,
             .party-db,
-            .gst-btn-group {
+            .gst-btn-group,
+            .sync-status {
                 display: none;
             }
 
@@ -232,17 +252,20 @@
         }
     </style>
 </head>
-<script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
 
 <body onload="initApp()">
 
     <div class="party-db">
-        <h3 style="margin-top:0; color:#1a73e8;">Step 1: Save Party & GST Details</h3>
+        <h3 style="margin-top:0; color:#1a73e8;">📊 GST Smart Bill System</h3>
+        <div id="syncStatus"></div>
+
+        <h4 style="margin-bottom:8px;">Step 1: Save Party & GST Details</h4>
         <div style="display:flex; gap:10px; margin-bottom:10px;">
             <input type="text" id="regName" placeholder="Buyer Party Name" style="flex:2;">
             <input type="text" id="regGST" placeholder="Party GSTIN" style="flex:1;">
             <button onclick="saveParty()"
-                style="background:#28a745; border:none; color:white; padding:5px 15px; border-radius:4px; cursor:pointer;">Save
+                style="background:#28a745; border:none; color:white; padding:5px 15px; border-radius:4px; cursor:pointer;">💾
+                Save
                 to Database</button>
         </div>
         <textarea id="regAddr" placeholder="Full Address of Party" style="width:98%; height:35px;"></textarea>
@@ -251,6 +274,7 @@
     <div class="btn-panel">
         <button class="main-btn" style="background:#1a73e8" onclick="printBill()">🖨️ Print & Next Invoice</button>
         <button class="main-btn" style="background:#ff9800" onclick="exportJSON()">📄 E-Way Bill JSON</button>
+        <button class="main-btn" style="background:#9c27b0" onclick="syncToGitHub()">☁️ Save to GitHub</button>
         <button class="main-btn" style="background:#d32f2f" onclick="clearDB()">♻️ Reset Everything</button>
     </div>
 
@@ -264,7 +288,7 @@
 
         <div class="grid-container">
             <div class="section">
-                <strong>Select Party:</strong>
+                <strong>party name:</strong>
                 <select id="partyDropdown" onchange="fillParty()" style="margin: 5px 0; border: 2px solid #1a73e8;">
                     <option value="">-- Choose From List --</option>
                 </select>
@@ -329,13 +353,12 @@
                     A/C NO. : <strong>50200108666890</strong><br>
                     IFSC : <strong>HDFC0001706</strong><br>
                     BRANCH : <strong>SACHIN SURAT</strong><br>
-                    A/C TYPE: <strong>CURRENT</strong>
-                    MMID : <strong>9240218</strong>
-
-                    UPI PAMENT : <strong>ayeshaenterprises.36661411@hdfcbank</strong>
+                    A/C TYPE: <strong>CURRENT</strong><br>
+                    MMID : <strong>9240218</strong><br>
+                    UPI PAYMENT : <strong>ayeshaenterprises.36661411@hdfcbank</strong>
                 </div>
-                <img src="qre.jpg.jpeg"
-                    style="width: 150px; height: 150px; object-fit: contain; border: 1px solid #eee;">
+                <!-- Dynamic QR Code Container -->
+                <div id="qrcode_container" class="qr-container"></div>
             </div>
             <div class="tax-calc">
                 Taxable Amount: ₹ <span id="taxable">0.00</span><br>
@@ -370,13 +393,51 @@
         </div>
     </div>
 
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+
     <script>
         let db = JSON.parse(localStorage.getItem('ayesha_db')) || [];
+        const GITHUB_TOKEN = localStorage.getItem('github_token') || '';
+        const GITHUB_REPO = 'salman00-collab/gst-bill-data';
+
+        // UPI Payment Details
+        const UPI_CONFIG = {
+            upiId: "ayeshaenterprises.36661411@hdfcbank",
+            payeeName: "AYESHA ENTERPRISES"
+        };
 
         function initApp() {
             document.getElementById('invDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('invNo').value = localStorage.getItem('ayesha_count') || 1;
             updateDropdown();
+            generateDynamicQR();
+            autoSaveToLocal();
+        }
+
+        // 🔄 Auto-save har 5 seconds mein local storage ko
+        setInterval(() => {
+            autoSaveToLocal();
+        }, 5000);
+
+        function autoSaveToLocal() {
+            let billData = {
+                invNo: document.getElementById('invNo').value,
+                invDate: document.getElementById('invDate').value,
+                bName: document.getElementById('bName').value,
+                bGST: document.getElementById('bGST').value,
+                bAddr: document.getElementById('bAddr').value,
+                dAddr: document.getElementById('dAddr').value,
+                pName: document.getElementById('pName').value,
+                hsn: document.getElementById('hsn').value,
+                qty: document.getElementById('qty').value,
+                rate: document.getElementById('rate').value,
+                gstPerc: document.getElementById('gstPerc').value,
+                vNo: document.getElementById('vNo').value,
+                dist: document.getElementById('dist').value,
+                net: document.getElementById('net').innerText,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('ayesha_current_bill', JSON.stringify(billData));
         }
 
         function saveParty() {
@@ -384,10 +445,13 @@
             let g = document.getElementById('regGST').value;
             let a = document.getElementById('regAddr').value;
             if (!n || !g) return alert("Details bharein!");
-            db.push({ n, g, a });
+            db.push({ n, g, a, saved_on: new Date().toISOString() });
             localStorage.setItem('ayesha_db', JSON.stringify(db));
             updateDropdown();
-            alert("Party Saved!");
+            showSyncStatus('Party saved locally! ✅', 'success');
+            document.getElementById('regName').value = '';
+            document.getElementById('regGST').value = '';
+            document.getElementById('regAddr').value = '';
         }
 
         function updateDropdown() {
@@ -432,6 +496,8 @@
             document.getElementById('cgst').innerText = (gst / 2).toFixed(2);
             document.getElementById('net').innerText = total.toFixed(2);
             document.getElementById('amountWords').innerText = priceToWords(Math.round(total));
+
+            generateDynamicQR();
         }
 
         function priceToWords(num) {
@@ -449,9 +515,31 @@
             return format(num) + 'Rupees Only';
         }
 
+        function generateDynamicQR() {
+            let amountElement = document.getElementById("net");
+            let amount = amountElement ? amountElement.innerText : "0";
+            amount = amount.replace(/[^\d.]/g, '').trim();
+            amount = amount || "0";
+
+            const upiUrl = `upi://pay?pa=${UPI_CONFIG.upiId}&pn=${encodeURIComponent(UPI_CONFIG.payeeName)}&am=${amount}&cu=INR`;
+
+            const qrContainer = document.getElementById("qrcode_container");
+            qrContainer.innerHTML = "";
+
+            new QRCode(qrContainer, {
+                text: upiUrl,
+                width: 150,
+                height: 150,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
         function printBill() {
             let c = parseInt(document.getElementById('invNo').value);
             localStorage.setItem('ayesha_count', c + 1);
+            autoSaveToLocal();
             window.print();
             setTimeout(() => { location.reload(); }, 800);
         }
@@ -459,9 +547,12 @@
         function exportJSON() {
             let eway = {
                 docNo: document.getElementById('invNo').value,
+                docDate: document.getElementById('invDate').value,
                 toGstin: document.getElementById('bGST').value,
                 vehicle: document.getElementById('vNo').value,
-                total: document.getElementById('net').innerText
+                distance: document.getElementById('dist').value,
+                total: document.getElementById('net').innerText,
+                exported_on: new Date().toISOString()
             };
             let blob = new Blob([JSON.stringify(eway, null, 2)], { type: "application/json" });
             let a = document.createElement('a');
@@ -470,45 +561,68 @@
             a.click();
         }
 
+        // 🌐 GitHub Save Function
+        async function syncToGitHub() {
+            showSyncStatus('⏳ Syncing to GitHub...', 'info');
+
+            let token = prompt('Enter your GitHub Personal Access Token:\n(Settings > Developer settings > Personal access tokens > Tokens (classic))\n\nFor first time, generate a new token with "repo" scope');
+            if (!token) {
+                showSyncStatus('❌ Token required!', 'error');
+                return;
+            }
+
+            localStorage.setItem('github_token', token);
+
+            try {
+                let billData = {
+                    invoices: JSON.parse(localStorage.getItem('ayesha_current_bill') || '{}'),
+                    parties: db,
+                    metadata: {
+                        saved_at: new Date().toISOString(),
+                        version: '1.0'
+                    }
+                };
+
+                const response = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/bills_data.json`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Auto-save bill on ${new Date().toLocaleString('en-IN')}`,
+                            content: btoa(JSON.stringify(billData, null, 2)),
+                            branch: 'main'
+                        })
+                    }
+                );
+
+                if (response.ok) {
+                    showSyncStatus('✅ Synced to GitHub successfully!', 'success');
+                } else {
+                    showSyncStatus('❌ GitHub sync failed! Check token & repo access.', 'error');
+                }
+            } catch (e) {
+                showSyncStatus('❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        function showSyncStatus(message, type) {
+            let el = document.getElementById('syncStatus');
+            el.innerHTML = `<div class="sync-status sync-${type}">${message}</div>`;
+            setTimeout(() => { el.innerHTML = ''; }, 4000);
+        }
+
         function clearDB() {
-            if (confirm("DANGER: Sab delete ho jayega. Reset karein?")) {
+            if (confirm("⚠️ Sab delete ho jayega. Phir se karte ho (Y/N)?")) {
                 localStorage.clear();
                 location.reload();
             }
         }
     </script>
+
 </body>
-<script>
-    function generateDynamicQR() {
-        // 1. Apni details yahan bharein
-        const upiId = "yourname@upi"; // Apni asli UPI ID yahan likhein
-        const payeeName = "AYESHA ENTERPRISES";
-
-        // 2. Bill ke 'Total' waale TD/Span ki ID se amount uthana
-        // Maan lijiye aapke total amount waale box ki id="totalAmount" hai
-        let amountElement = document.getElementById("totalAmount");
-        let amount = amountElement ? amountElement.innerText : "0";
-
-        // Amount se extra symbols (₹, symbols) hatana
-        amount = amount.replace(/[^\d.-]/g, '');
-
-        // 3. UPI Deep Link String
-        const upiUrl = `upi://pay?pa=${upiId}&pn=${payeeName}&am=${amount}&cu=INR`;
-
-        // 4. QR Code generate karna
-        document.getElementById("qrcode_container").innerHTML = ""; // Purana saaf karna
-        new QRCode(document.getElementById("qrcode_container"), {
-            text: upiUrl,
-            width: 150,
-            height: 150,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-        });
-    }
-
-    // Page load hone par QR generate karein
-    window.onload = generateDynamicQR;
-</script>
 
 </html>
