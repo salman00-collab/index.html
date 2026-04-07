@@ -259,7 +259,7 @@
         <h3 style="margin-top:0; color:#1a73e8;">📊 GST Smart Bill System</h3>
         <div id="syncStatus"></div>
 
-        <h4 style="margin-bottom:8px;">Step 1: Save party & GST Details</h4>
+        <h4 style="margin-bottom:8px;">Step 1: Save Party & GST Details</h4>
         <div style="display:flex; gap:10px; margin-bottom:10px;">
             <input type="text" id="regName" placeholder="Buyer Party Name" style="flex:2;">
             <input type="text" id="regGST" placeholder="Party GSTIN" style="flex:1;">
@@ -282,30 +282,32 @@
         <div class="header">
             <h1>AYESHA ENTERPRISES</h1>
             <p>00 KASBA STREET Olpad Surat, Gujarat, 394540<br>
-                Contact: 9727975024 | GSTIN: <strong>24IZGPK5099J1ZQ</strong></p>
+                Contact: 9727975024 | GSTIN: <strong>24ZGPK5099J1ZQ</strong></p>
             <div class="tax-label">TAX INVOICE</div>
         </div>
 
         <div class="grid-container">
             <div class="section">
-                <strong>Party name:</strong>
+                <strong>party name:</strong>
                 <select id="partyDropdown" onchange="fillParty()" style="margin: 5px 0; border: 2px solid #1a73e8;">
                     <option value="">-- Choose From List --</option>
                 </select>
                 <hr>
                 <strong>Buyer Name:</strong><br>
                 <input type="text" id="bName"><br>
-                <strong>GSTIN:</strong> <input type="text" id="bGST" style="color:black; font-weight:bold;"><br>
-                <strong>Address:</strong> <textarea id="bAddr" rows="3" style="field-sizing: content; border: none; outline: none; width: 100%; resize: none; overflow: hidden; font-family: inherit; font-size: inherit;"></textarea>
+                <strong>GSTIN:</strong> <input type="text" id="bGST" style="color:rgb(0, 0, 0); font-weight:bold;"><br>
+                <strong>Address:</strong> <textarea id="bAddr" rows="3"
+                    style="field-sizing: content; border: none; outline: none; width: 100%; resize: none; overflow: hidden; font-family: inherit; font-size: inherit;"></textarea>
             </div>
             <div class="section" style="border-right:none;">
                 <strong> Shipping Address:</strong><br>
-                <textarea id="dAddr" rows="8" style="field-sizing: content; border: none; outline: none; width: 100%; resize: none; overflow: hidden; font-family: inherit; font-size: inherit;"></textarea>
+                <textarea id="dAddr" rows="8"
+                    style="field-sizing: content; border: none; outline: none; width: 100%; resize: none; overflow: hidden; font-family: inherit; font-size: inherit;"></textarea>
             </div>
         </div>
 
         <div class="meta-grid">
-            <div class="meta-item">Invoice No: <input type="text" id="invNo" style="color:red;"></div>
+            <div class="meta-item">Invoice No: <input type="text" id="invNo" style="color:rgb(0, 0, 0);"></div>
             <div class="meta-item">Date: <input type="date" id="invDate"></div>
             <div class="meta-item">Vehicle No: <input type="text" id="vNo" placeholder="GJ19XX0000"></div>
             <div class="meta-item" style="border-right:none;">Distance: <input type="number" id="dist" value="0"> km
@@ -365,7 +367,7 @@
                 SGST Amount: ₹ <span id="sgst">0.00</span><br>
                 CGST Amount: ₹ <span id="cgst">0.00</span>
                 <hr>
-                <span style="font-size:16px;">BILL AMOUNT: ₹ <span id="net" style="color:black;">0.00</span></span>
+                <span style="font-size:16px;">BILL AMOUNT: ₹ <span id="net" style="color:rgb(8, 8, 8);">0.00</span></span>
             </div>
         </div>
 
@@ -407,17 +409,18 @@
         };
 
         function initApp() {
-            document.getElementById('invDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('invNo').value = localStorage.getItem('ayesha_count') || 1;
-            updateDropdown();
-            generateDynamicQR();
-            autoSaveToLocal();
-        }
+    // 1. Set current Date
+    document.getElementById('invDate').value = new Date().toISOString().split('T')[0];
+    
+    // 2. Load only the next Invoice Number
+    document.getElementById('invNo').value = localStorage.getItem('ayesha_count') || 1;
 
-        // 🔄 Auto-save har 5 seconds mein local storage ko
-        setInterval(() => {
-            autoSaveToLocal();
-        }, 5000);
+    // 3. Keep the form empty on refresh (Removed the data loading part)
+    console.log("Form reset for new entry.");
+    
+    updateDropdown();
+    generateDynamicQR();
+}
 
         function autoSaveToLocal() {
             let billData = {
@@ -425,8 +428,8 @@
                 invDate: document.getElementById('invDate').value,
                 bName: document.getElementById('bName').value,
                 bGST: document.getElementById('bGST').value,
-                bAddr: document.getElementById('bAddr').value,
-                dAddr: document.getElementById('dAddr').value,
+                bAddr: document.getElementById('bAddr').value, // Buyer Address
+                dAddr: document.getElementById('dAddr').value, // Shipping Address
                 pName: document.getElementById('pName').value,
                 hsn: document.getElementById('hsn').value,
                 qty: document.getElementById('qty').value,
@@ -437,6 +440,8 @@
                 net: document.getElementById('net').innerText,
                 timestamp: new Date().toISOString()
             };
+
+            // Save as a string in Local Storage
             localStorage.setItem('ayesha_current_bill', JSON.stringify(billData));
         }
 
@@ -536,13 +541,24 @@
             });
         }
 
-        function printBill() {
-            let c = parseInt(document.getElementById('invNo').value);
-            localStorage.setItem('ayesha_count', c + 1);
-            autoSaveToLocal();
-            window.print();
-            setTimeout(() => { location.reload(); }, 800);
-        }
+       function printBill() {
+    // Save to memory for invoice count safety
+    let invInput = document.getElementById('invNo');
+    let currentNo = parseInt(invInput.value) || 1;
+    localStorage.setItem('ayesha_count', currentNo + 1);
+
+    // Opening print window
+    setTimeout(() => {
+        window.print();
+    }, 500);
+
+    // After PDF is handled, refresh the page to clear everything
+    setTimeout(() => {
+        // Clear only the current bill draft from storage
+        localStorage.removeItem('ayesha_current_bill'); 
+        location.reload(); 
+    }, 3000);
+}
 
         function exportJSON() {
             let eway = {
